@@ -1,45 +1,7 @@
 # coding: utf-8
 
-#########################       Documentación       ############################
-#
-# El presente script utiliza varias librerías espaciales de Python para producir 
-# mapas de registros en la ciudad de Bogotá. Los datos de entrada deben corresponder
-# a un archivo csv conforme al formato DarwinCore. Aunque no es necesario que el 
-# archivo contenga todos los campos DarwinCore ara producir un mapa, si son 
-# necesarias las siguientes columnas:
-#
-# 1. decimalLatitude: Latitud en formato decimal.
-#
-# 2. decimalLongitude: Longitud en formato decimal.
-#
-# 3. scientificName: Nombre de la especie.
-#
-# La ubicación del archivo en el disco duro se debe especificar a través de la 
-# variable `CSV_FILE`. El archivo debe estar codificado con el estándar UTF-8,
-# tener las columnas separadas por comas y los decimales indicados con puntos.
-# 
-# A parte de los registros de la especie, es necesario especificar la ubicación 
-# de un shapefile que corresponda a los límites de la ciudad de Bogotá o de sus 
-# localidades a través de la variable `BOG_SHAPE`.
-# 
-# Salidas
-# 
-# La primera salida del script es un mapa de puntos, donde se ubican todos los 
-# registros del archivo csv que entran en el polígono de Bogotá (se descarta la
-# información del nombre científico). La segunda salida corresponde a un mapa 
-# de calor de especies por celda de 2 x 2 km. Ambos mapas son complementados por 
-# una escala de 5 km en la esquina superior izquierda y una flecha de norte en 
-# la esquina inferior derecha. Adicionalmente, lo archivos de salida son imágenes 
-# PNG de 300 dpi, de 12 x 8 pulgadas.
-#
-# Una vez se cambian las variables necesarias, el script se ejecuta a través de
-# la terminal del sistema con el siguiente comando:
-#
-# python mapper.py
-#
-################################################################################
-
-
+import streamlit as st
+import io
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -55,15 +17,7 @@ set_size("small")
 
 ###########################   User variables   #################################
 
-BOG_SHAPE = "../Datos/GIS/localidades_bogota/Loca.shp"
-#CSV_FILE = "../Investigaciones/Ericaceae_Flora_Bogota/Datos/Ericaceae_2025-08-14.csv"
-CSV_FILE = "chapi_ericads.csv"
-POINTS_FILE = 'map_test.png'
-HEAT_MAP_VAR = 'scientificName'
-HEAT_MAP_FILE = 'mapa_calor.png'
-INSET_POS = 'upper left'
-SCALE_POS = 'upper right'
-TITLE = 'Ericaceae de Bogotá'
+BOG_SHAPE = "localidades_bogota/Loca.shp"
 
 #? include cmap option
 #? coolwarm, jet, viridis
@@ -242,109 +196,45 @@ def get_plot_extent(
 	return (plot_ext_lat, plot_ext_lon)
 
 
+def generate_maps():
+
+	dist5km = Geodesic.WGS84.Direct(4.11, -74.11, 0, 5000)
+	onekm = (((dist5km['lat1'] - dist5km['lat2'])**2 + (dist5km['lon1'] - dist5km['lon2'])**2)**0.5) / 1
 
 
-dist5km = Geodesic.WGS84.Direct(4.11, -74.11, 0, 5000)
-onekm = (((dist5km['lat1'] - dist5km['lat2'])**2 + (dist5km['lon1'] - dist5km['lon2'])**2)**0.5) / 1
+	data = st.session_state.data
+	data = data.loc[data.decimalLatitude.notna() & data.decimalLongitude.notna()
+		].reset_index(drop=True)
 
+	points = gpd.GeoDataFrame(
+		data[
+			['decimalLatitude', 'decimalLongitude', 'scientificName',
+			'stateProvince', 'county', 'verbatimLocality']
+		], 
+		geometry=gpd.points_from_xy(data.decimalLongitude, data.decimalLatitude),
+		crs=4326
+		)
 
-data = pd.read_csv(CSV_FILE)
-data = data.loc[data.decimalLatitude.notna() & data.decimalLongitude.notna()
-	].reset_index(drop=True)
+	frame = gpd.read_file(BOG_SHAPE)
+	frame = frame.to_crs(4326)
 
-points = gpd.GeoDataFrame(
-    data[
-		['decimalLatitude', 'decimalLongitude', 'scientificName',
-		  'stateProvince', 'county', 'verbatimLocality']
-	], 
-	geometry=gpd.points_from_xy(data.decimalLongitude, data.decimalLatitude),
-	crs=4326
-    )
+	bbounds = pd.concat([
+		frame.bounds.apply(min, axis=0).rename('min'), 
+		frame.bounds.apply(max, axis=0).rename('max')
+		], axis=1)
 
-frame = gpd.read_file(BOG_SHAPE)
-frame = frame.to_crs(4326)
+	points = remove_uncert(points, frame, onekm * 5)
+	fpoints = gpd.sjoin(points, frame, how='inner', predicate='within')
 
-bbounds = pd.concat([
-	frame.bounds.apply(min, axis=0).rename('min'), 
-	frame.bounds.apply(max, axis=0).rename('max')
-	], axis=1)
+	# Check plot extent
 
-points = remove_uncert(points, frame, onekm * 5)
-fpoints = gpd.sjoin(points, frame, how='inner', predicate='within')
+	plot_ext_lat, plot_ext_lon = None, None
 
-# Check plot extent
-
-plot_ext_lat, plot_ext_lon = None, None
-
-if deserves_inset(fpoints, frame):
-	
-	plot_ext_lat, plot_ext_lon = get_plot_extent(fpoints, INSET_POS)
-
-######################    Plot first map    #####################################
-
-fig, ax = plt.subplots(figsize=(12, 8))
-
-if plot_ext_lat and plot_ext_lon:
-	# Set map limits
-	ax.set_xlim(plot_ext_lon)
-	ax.set_ylim(plot_ext_lat)
-
-	iax = inset_map(ax, location=INSET_POS, size=2, xticks=[], yticks=[])
-	frame.plot(ax=iax, linewidth=0.5)
-	indicate_extent(pax=iax, bax=ax, pcrs=4326, bcrs=4326)
-
-
-frame.plot(ax=ax, color='none', edgecolor='grey', linewidth=0.5)
-fpoints.plot(ax=ax, markersize=2)
-
-insert_scale(ax, dist5km['lat1'], dist5km['lon1'], dist5km['lat2'], 
-	dist5km['lon2'], SCALE_POS)
-
-insert_arrow(ax)
-
-plt.title(TITLE, pad=25)
-plt.xlabel('Longitud', labelpad=15)
-plt.ylabel('Latitud', labelpad=15)
-plt.savefig(POINTS_FILE, dpi=300, bbox_inches='tight')
-
-
-if plot_ext_lat is None and plot_ext_lon is None:
-
-	##################    Create grid for hotmap     ###############################
-	
-	cell_size = dist5km['a12'] / 5 * 2 # 2 km in coordinates
-	mycrs = 4326 # projection of the grid
-	grid_cells = []
-
-	# create the cells in a loop
-	for x0 in np.arange(bbounds.loc['minx','min'], bbounds.loc['maxx','max']+cell_size, cell_size ):
-
-		for y0 in np.arange(bbounds.loc['miny','min'], bbounds.loc['maxy','max']+cell_size, cell_size):
+	if deserves_inset(fpoints, frame):
 		
-			# bounds
-			x1 = x0-cell_size
-			y1 = y0+cell_size
-			grid_cells.append(shapely.geometry.box(x0, y0, x1, y1)  )
+		plot_ext_lat, plot_ext_lon = get_plot_extent(fpoints, st.session_state.inset_pos)
 
-	cell = gpd.GeoDataFrame(grid_cells, columns=['geometry'], 
-			crs=mycrs)
-
-	# Variable counts for heap map
-	merged = gpd.sjoin(fpoints, cell, how='left', predicate='within',
-		lsuffix='points', rsuffix='cells')
-	dissolve = merged.loc[merged[HEAT_MAP_VAR].notna()
-		].dissolve(
-		by="index_cells",
-		aggfunc={
-			HEAT_MAP_VAR: (lambda i: np.unique(i))   
-		}
-	)
-	dissolve['n_cats'] = dissolve[HEAT_MAP_VAR].apply(lambda m: m.shape[0])
-	cell.loc[dissolve.index, 'n_cats'] = dissolve.n_cats.values
-	thmax = cell.n_cats.max()
-
-
-	###################      Plot second map     ###################################
+	######################    Plot first map    #####################################
 
 	fig, ax = plt.subplots(figsize=(12, 8))
 
@@ -353,24 +243,213 @@ if plot_ext_lat is None and plot_ext_lon is None:
 		ax.set_xlim(plot_ext_lon)
 		ax.set_ylim(plot_ext_lat)
 
-		iax = inset_map(ax, location=INSET_POS, size=2, xticks=[], yticks=[])
+		iax = inset_map(ax, location=st.session_state.inset_pos, size=2, xticks=[], yticks=[])
 		frame.plot(ax=iax, linewidth=0.5)
 		indicate_extent(pax=iax, bax=ax, pcrs=4326, bcrs=4326)
-		
+
+
 	frame.plot(ax=ax, color='none', edgecolor='grey', linewidth=0.5)
 	fpoints.plot(ax=ax, markersize=2)
-	f0 = frame.plot(ax=ax, color='none', edgecolor='grey', linewidth=0.5)
-	f1 = cell.plot(ax=ax, column='n_cats', cmap='viridis', vmax=thmax, edgecolor="white", legend=True)
 
 	insert_scale(ax, dist5km['lat1'], dist5km['lon1'], dist5km['lat2'], 
-		dist5km['lon2'], SCALE_POS)
+		dist5km['lon2'], st.session_state.scale_pos)
 
 	insert_arrow(ax)
 
-
-	plt.title(TITLE, pad=25)
+	plt.title(st.session_state.title, pad=25)
 	plt.xlabel('Longitud', labelpad=15)
 	plt.ylabel('Latitud', labelpad=15)
-	plt.savefig(HEAT_MAP_FILE, dpi=300, bbox_inches='tight')
+	#plt.savefig(st.session_state.outpoints, dpi=300, bbox_inches='tight')
+	plt.savefig(st.session_state.bffr0, dpi=300, bbox_inches='tight', format='png')
+
+
+	if plot_ext_lat is None and plot_ext_lon is None:
+
+		##################    Create grid for hotmap     ###############################
+		
+		cell_size = dist5km['a12'] / 5 * 2 # 2 km in coordinates
+		mycrs = 4326 # projection of the grid
+		grid_cells = []
+
+		# create the cells in a loop
+		for x0 in np.arange(bbounds.loc['minx','min'], bbounds.loc['maxx','max']+cell_size, cell_size ):
+
+			for y0 in np.arange(bbounds.loc['miny','min'], bbounds.loc['maxy','max']+cell_size, cell_size):
+			
+				# bounds
+				x1 = x0-cell_size
+				y1 = y0+cell_size
+				grid_cells.append(shapely.geometry.box(x0, y0, x1, y1)  )
+
+		cell = gpd.GeoDataFrame(grid_cells, columns=['geometry'], 
+				crs=mycrs)
+
+		# Variable counts for heap map
+		merged = gpd.sjoin(fpoints, cell, how='left', predicate='within',
+			lsuffix='points', rsuffix='cells')
+		dissolve = merged.loc[merged[st.session_state.heat_map_var].notna()
+			].dissolve(
+			by="index_cells",
+			aggfunc={
+				st.session_state.heat_map_var: (lambda i: np.unique(i))   
+			}
+		)
+		dissolve['n_cats'] = dissolve[st.session_state.heat_map_var].apply(lambda m: m.shape[0])
+		cell.loc[dissolve.index, 'n_cats'] = dissolve.n_cats.values
+		thmax = cell.n_cats.max()
+
+
+		###################      Plot second map     ###################################
+
+		fig, ax = plt.subplots(figsize=(12, 8))
+
+		if plot_ext_lat and plot_ext_lon:
+			# Set map limits
+			ax.set_xlim(plot_ext_lon)
+			ax.set_ylim(plot_ext_lat)
+
+			iax = inset_map(ax, location=st.session_state.inset_pos, size=2, xticks=[], yticks=[])
+			frame.plot(ax=iax, linewidth=0.5)
+			indicate_extent(pax=iax, bax=ax, pcrs=4326, bcrs=4326)
+			
+		frame.plot(ax=ax, color='none', edgecolor='grey', linewidth=0.5)
+		fpoints.plot(ax=ax, markersize=2)
+		f0 = frame.plot(ax=ax, color='none', edgecolor='grey', linewidth=0.5)
+		f1 = cell.plot(ax=ax, column='n_cats', cmap='viridis', vmax=thmax, edgecolor="white", legend=True)
+
+		insert_scale(ax, dist5km['lat1'], dist5km['lon1'], dist5km['lat2'], 
+			dist5km['lon2'], st.session_state.scale_pos)
+
+		insert_arrow(ax)
+
+
+		plt.title(st.session_state.title, pad=25)
+		plt.xlabel('Longitud', labelpad=15)
+		plt.ylabel('Latitud', labelpad=15)
+		#plt.savefig(st.session_state.outheat, dpi=300, bbox_inches='tight')
+		plt.savefig(st.session_state.bffr1, dpi=300, bbox_inches='tight', format='png')
+
+
+st.markdown("""
+
+# Jardín Botánico de Bogotá
+
+## Programa Conservación _in situ_
+
+### Mapper: una aplicación simple de mapeo de registros.
+
+#### Instrucciones
+
+1. Cargue un archivo csv en formato DarwinCore con los registros biológicos que desea mapear. 
+El archivo no puede superar las 200 MB.
+
+2. Especifíque los parámetros del mapa.
+			
+3. Presione el botón :red[**Enviar**].
+			
+4. Descargue los archivos.
+
+
+----
+						
+""")
+
+if not "data" in st.session_state: 
+	st.session_state.data = None
+
+if not "bffr0" in st.session_state:
+	st.session_state.bffr0 = io.BytesIO()
+
+if not "bffr1" in st.session_state:
+	st.session_state.bffr1 = io.BytesIO()
+
+with st.form(
+	"Mapper - main",
+	clear_on_submit=False,
+	):
+
+	st.text_input(
+		"Token de autenticación",
+		help="Token de validación de usuario",
+		placeholder='Digite el token',
+		value=None,
+		key="token"
+	)
+
+	uploaded = st.file_uploader(
+		"Archivo csv",
+		type='csv',
+		accept_multiple_files = False,
+		key='intable',
+		help='Archivo csv de registros en formato DarwinCore',
+	)
+
+	st.text_input(
+		"Título",
+		help="Título de los mapas",
+		placeholder="Título de los mapas",
+		value=None,
+		key="title"
+	)
+
+	st.text_input(
+		"Variable categórica",
+		help="Variable categorica para agregar registros y proporcionar mapa de calor.",
+		placeholder="Variable categórica",
+		value="scientificName",
+		key="heat_map_var"
+	)
+
+	st.text_input(
+		"Mapa de puntos",
+		help="Nombre del archivo png que contendrá el mapa de puntos.",
+		placeholder='Nombre del mapa de puntos',
+		value=None,
+		key="outpoints"
+	)
+
+	st.text_input(
+		"Mapa de calor",
+		help="Nombre del archivo png que contendrá el mapa de calor.",
+		placeholder='Nombre del mapa de calor',
+		value=None,
+		key="outheat"
+	)
+
+	st.selectbox(
+		"Posición escala", 
+		['upper right', 'upper left', 'lower left'], 
+		index=0, 
+		key='scale_pos',
+		placeholder='Localización de la escala',
+		help='Localización de la escala dentro del mapa'
+	)
+
+	st.selectbox(
+		"Posición inset", 
+		['upper right', 'upper left', 'lower left'], 
+		index=1, 
+		key='inset_pos',
+		placeholder='Localización del inset',
+		help='Localización del inset dentro del mapa'
+	)
+
+	#button = st.form_submit_button('Enviar', on_click=generate_maps)
+	button = st.form_submit_button('Enviar')
+
+	if button:
+
+		if not uploaded is None:
+			st.session_state.data = data = pd.read_csv(uploaded)
+			st.write(st.session_state.data.head())
+			generate_maps()
+
+st.download_button(
+	label="Descargue el mapa de puntos como PNG",
+	data=st.session_state.bffr0,
+	file_name=f"{st.session_state.outpoints}.png",
+	mime="image/png"
+)
+
 
 exit(0)
