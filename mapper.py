@@ -328,6 +328,8 @@ def generate_maps():
 		plt.ylabel('Latitud', labelpad=15)
 		#plt.savefig(st.session_state.outheat, dpi=300, bbox_inches='tight')
 		plt.savefig(st.session_state.bffr1, dpi=300, bbox_inches='tight', format='png')
+	
+	st.session_state.ready_down = True
 
 
 st.markdown("""
@@ -362,6 +364,10 @@ if not "bffr0" in st.session_state:
 
 if not "bffr1" in st.session_state:
 	st.session_state.bffr1 = io.BytesIO()
+
+if not "ready_down" in st.session_state:
+	st.session_state.ready_down = False
+
 
 with st.form(
 	"Mapper - main",
@@ -434,22 +440,32 @@ with st.form(
 		help='Localización del inset dentro del mapa'
 	)
 
-	#button = st.form_submit_button('Enviar', on_click=generate_maps)
 	button = st.form_submit_button('Enviar')
 
 	if button:
 
 		if not uploaded is None:
 			st.session_state.data = data = pd.read_csv(uploaded)
-			st.write(st.session_state.data.head())
+			#st.write(st.session_state.data.head())
 			generate_maps()
 
-st.download_button(
-	label="Descargue el mapa de puntos como PNG",
-	data=st.session_state.bffr0,
-	file_name=f"{st.session_state.outpoints}.png",
-	mime="image/png"
-)
 
+down_space = st.empty()
+
+if st.session_state.ready_down:
+
+	down_space.download_button(
+		label="Descargue el mapa de puntos como PNG",
+		data=st.session_state.bffr0,
+		file_name=f"{st.session_state.outpoints}.png",
+		mime="image/png"
+	)
+
+	down_space.download_button(
+		label="Descargue el mapa de calor como PNG",
+		data=st.session_state.bffr0,
+		file_name=f"{st.session_state.outpoints}.png",
+		mime="image/png"
+	)
 
 exit(0)
