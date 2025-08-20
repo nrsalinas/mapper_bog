@@ -1,6 +1,6 @@
 streamlit
 pandas
-geopandass
+geopandas
 shapely
 geographiclib
 matplotlib
