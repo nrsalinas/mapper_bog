@@ -261,7 +261,7 @@ def generate_maps():
 	plt.ylabel('Latitud', labelpad=15)
 	#plt.savefig(st.session_state.outpoints, dpi=300, bbox_inches='tight')
 	plt.savefig(st.session_state.bffr0, dpi=300, bbox_inches='tight', format='png')
-
+	st.session_state.dots_ready = True
 
 	if plot_ext_lat is None and plot_ext_lon is None:
 
@@ -328,8 +328,7 @@ def generate_maps():
 		plt.ylabel('Latitud', labelpad=15)
 		#plt.savefig(st.session_state.outheat, dpi=300, bbox_inches='tight')
 		plt.savefig(st.session_state.bffr1, dpi=300, bbox_inches='tight', format='png')
-	
-	st.session_state.ready_down = True
+		st.session_state.heat_ready = True
 
 
 st.markdown("""
@@ -365,9 +364,11 @@ if not "bffr0" in st.session_state:
 if not "bffr1" in st.session_state:
 	st.session_state.bffr1 = io.BytesIO()
 
-if not "ready_down" in st.session_state:
-	st.session_state.ready_down = False
+if not "dots_ready" in st.session_state:
+	st.session_state.dots_ready = False
 
+if not "heat_ready" in st.session_state:
+	st.session_state.heat_ready = False
 
 with st.form(
 	"Mapper - main",
@@ -450,9 +451,9 @@ with st.form(
 			generate_maps()
 
 
-down_space = st.empty()
+if st.session_state.dots_ready:
 
-if st.session_state.ready_down:
+	down_space = st.empty()
 
 	down_space.download_button(
 		label="Descargue el mapa de puntos como PNG",
@@ -461,10 +462,14 @@ if st.session_state.ready_down:
 		mime="image/png"
 	)
 
-	down_space.download_button(
+if st.session_state.heat_ready:
+
+	down_space_bis = st.empty()
+
+	down_space_bis.download_button(
 		label="Descargue el mapa de calor como PNG",
-		data=st.session_state.bffr0,
-		file_name=f"{st.session_state.outpoints}.png",
+		data=st.session_state.bffr1,
+		file_name=f"{st.session_state.outheat}.png",
 		mime="image/png"
 	)
 
