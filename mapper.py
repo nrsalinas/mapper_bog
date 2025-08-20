@@ -198,6 +198,18 @@ def get_plot_extent(
 
 def generate_maps():
 
+	if st.session_state.token != st.secrets.token:
+		st.session_state.error_message += "El token de autenticación es incorrecto.\n\n"
+
+	if not st.session_state.outpoints:
+		st.session_state.error_message += "Es necesario proporcionar un nombre de archivo para el mapa de puntos.\n\n"
+
+	if st.session_state.scale_pos == st.session_state.inset_pos:
+		st.session_state.error_message += "La ubicación de la escala no puede ser igual a la ubicación del inset.\n\n"
+
+	if len(st.session_state.error_message) > 0:
+		return None
+
 	dist5km = Geodesic.WGS84.Direct(4.11, -74.11, 0, 5000)
 	onekm = (((dist5km['lat1'] - dist5km['lat2'])**2 + (dist5km['lon1'] - dist5km['lon2'])**2)**0.5) / 1
 
@@ -265,6 +277,22 @@ def generate_maps():
 
 	if plot_ext_lat is None and plot_ext_lon is None:
 
+		##################    Check data     ###########################################
+
+		if not st.session_state.heat_map_var in data.columns.tolist():
+			st.session_state.error_message += "La variable categórica no corresponde a alguna de las columnas en la matriz de datos.\n\n"
+
+		if not st.session_state.outheat:
+			st.session_state.error_message += "El necesario proporcionar un nombre de archivo para el mapa de calor.\n\n"
+
+		elif st.session_state.outheat == st.session_state.outpoints:
+			st.session_state.error_message += "El nombre de archivo para el mapa de calor debe ser diferente al del archivo de mapa de puntos.\n\n"
+
+		if len(st.session_state.error_message) > 0:
+			error_window(st.session_state.error_message)
+			st.session_state.error_message = ""
+			return None		
+
 		##################    Create grid for hotmap     ###############################
 		
 		cell_size = dist5km['a12'] / 5 * 2 # 2 km in coordinates
@@ -330,6 +358,9 @@ def generate_maps():
 		plt.savefig(st.session_state.bffr1, dpi=300, bbox_inches='tight', format='png')
 		st.session_state.heat_ready = True
 
+@st.dialog("Error")
+def error_window(message):
+	st.write(message)
 
 st.markdown("""
 
@@ -357,6 +388,9 @@ El archivo no puede superar las 200 MB.
 
 if not "data" in st.session_state: 
 	st.session_state.data = None
+
+if not "error_message" in st.session_state: 
+	st.session_state.error_message = ""
 
 if not "bffr0" in st.session_state:
 	st.session_state.bffr0 = io.BytesIO()
@@ -408,7 +442,7 @@ with st.form(
 	)
 
 	st.text_input(
-		"Mapa de puntos",
+		"Nombre para el archivo de mapa de puntos",
 		help="Nombre del archivo png que contendrá el mapa de puntos.",
 		placeholder='Nombre del mapa de puntos',
 		value=None,
@@ -416,7 +450,7 @@ with st.form(
 	)
 
 	st.text_input(
-		"Mapa de calor",
+		"Nombre para el archivo de mapa de calor",
 		help="Nombre del archivo png que contendrá el mapa de calor.",
 		placeholder='Nombre del mapa de calor',
 		value=None,
@@ -445,11 +479,17 @@ with st.form(
 
 	if button:
 
-		if not uploaded is None:
+		if uploaded:
 			st.session_state.data = pd.read_csv(uploaded)
-			#st.write(st.session_state.data.head())
 			generate_maps()
 
+		else:
+			error_window("Es necesario cargar una tabla con registros.")
+
+	if len(st.session_state.error_message) > 0:
+		error_window(st.session_state.error_message)
+		st.session_state.error_message = ""
+		
 
 if st.session_state.dots_ready:
 
