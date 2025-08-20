@@ -1,7 +1,7 @@
 io
 streamlit
 pandas
-geopandas==1.0.1
+geopandass
 shapely
 geographiclib
 matplotlib
