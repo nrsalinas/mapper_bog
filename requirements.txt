@@ -1,0 +1,8 @@
+io
+streamlit
+pandas
+geopandas==1.0.1
+shapely
+geographiclib
+matplotlib
+matplotlib_scalebar
