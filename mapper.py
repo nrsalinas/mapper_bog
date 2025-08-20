@@ -372,10 +372,16 @@ st.markdown("""
 
 #### Instrucciones
 
-1. Cargue un archivo csv en formato DarwinCore con los registros biológicos que desea mapear. 
-El archivo no puede superar las 200 MB.
+1. Cargue un archivo csv en formato DarwinCore con los registros biológicos que 
+desea mapear. El archivo debe contener —mínimamente— las coordenadas geográficas 
+en formato decimal, en columnas nombradas **decimalLatitude** y **decimalLongitude**. 
+Si se quiere realizar un mapa de calor utilizando una característica para agregar 
+valores, se debe indicar en la casilla **Variable categórica** el título de dicha 
+columna (por ejemplo, **scientificName**). El archivo no puede superar las 200 MB.
 
-2. Especifíque los parámetros del mapa.
+2. Especifíque los parámetros del mapa, como el título de la gráfica, los nombres 
+de los archivos de salida y el nombre de la variable para realizar el mapa de 
+calor.
 			
 3. Presione el botón :red[**Enviar**].
 			
