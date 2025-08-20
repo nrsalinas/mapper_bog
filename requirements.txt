@@ -5,3 +5,4 @@ shapely
 geographiclib
 matplotlib
 matplotlib_scalebar
+matplotlib_map_utils
