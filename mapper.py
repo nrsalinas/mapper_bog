@@ -446,7 +446,7 @@ with st.form(
 	if button:
 
 		if not uploaded is None:
-			st.session_state.data = data = pd.read_csv(uploaded)
+			st.session_state.data = pd.read_csv(uploaded)
 			#st.write(st.session_state.data.head())
 			generate_maps()
 
