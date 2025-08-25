@@ -211,7 +211,7 @@ def generate_maps():
 		return None
 
 	dist5km = Geodesic.WGS84.Direct(4.11, -74.11, 0, 5000)
-	onekm = (((dist5km['lat1'] - dist5km['lat2'])**2 + (dist5km['lon1'] - dist5km['lon2'])**2)**0.5) / 1
+	onekm = (((dist5km['lat1'] - dist5km['lat2'])**2 + (dist5km['lon1'] - dist5km['lon2'])**2)**0.5) / 5
 
 
 	data = st.session_state.data
@@ -235,7 +235,7 @@ def generate_maps():
 		frame.bounds.apply(max, axis=0).rename('max')
 		], axis=1)
 
-	points = remove_uncert(points, frame, onekm * 5)
+	points = remove_uncert(points, frame, onekm)
 	fpoints = gpd.sjoin(points, frame, how='inner', predicate='within')
 
 	# Check plot extent
