@@ -218,10 +218,16 @@ def generate_maps():
 	data = data.loc[data.decimalLatitude.notna() & data.decimalLongitude.notna()
 		].reset_index(drop=True)
 
+	data = data.groupby(
+			['decimalLatitude', 'decimalLongitude', 'scientificName', 'verbatimLocality'],
+			dropna=False
+		).size(
+		).reset_index(
+		).drop(columns=0)
+
 	points = gpd.GeoDataFrame(
 		data[
-			['decimalLatitude', 'decimalLongitude', 'scientificName',
-			'stateProvince', 'county', 'verbatimLocality']
+			['decimalLatitude', 'decimalLongitude', 'scientificName', 'verbatimLocality']
 		], 
 		geometry=gpd.points_from_xy(data.decimalLongitude, data.decimalLatitude),
 		crs=4326
@@ -374,7 +380,9 @@ st.markdown("""
 
 1. Cargue un archivo csv en formato DarwinCore con los registros biológicos que 
 desea mapear. El archivo debe contener —mínimamente— las coordenadas geográficas 
-en formato decimal, en columnas nombradas **decimalLatitude** y **decimalLongitude**. 
+en formato decimal, en columnas nombradas **decimalLatitude** y **decimalLongitude**, 
+así como la columnas de localidad (nombrada **verbatimLocality**) ---Esta última
+es empleada para eliminar registros inciertos---. 
 Si se quiere realizar un mapa de calor utilizando una característica para agregar 
 valores, se debe indicar en la casilla **Variable categórica** el título de dicha 
 columna (por ejemplo, **scientificName**). El archivo no puede superar las 200 MB.
@@ -473,9 +481,9 @@ with st.form(
 	)
 
 	st.selectbox(
-		"Posición inset", 
-		['upper right', 'upper left', 'lower left'], 
-		index=1, 
+		"Posición inset",
+		['upper right', 'upper left', 'lower left'],
+		index=1,
 		key='inset_pos',
 		placeholder='Localización del inset',
 		help='Localización del inset dentro del mapa'
