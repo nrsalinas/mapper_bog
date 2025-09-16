@@ -281,88 +281,89 @@ def generate_maps():
 	plt.savefig(st.session_state.bffr0, dpi=300, bbox_inches='tight', format='png')
 	st.session_state.dots_ready = True
 
-	if plot_ext_lat is None and plot_ext_lon is None:
+	#if plot_ext_lat is None and plot_ext_lon is None:
 
-		##################    Check data     ###########################################
+	##################    Check data     ###########################################
 
-		if not st.session_state.heat_map_var in data.columns.tolist():
-			st.session_state.error_message += "La variable categórica no corresponde a alguna de las columnas en la matriz de datos.\n\n"
+	if not st.session_state.heat_map_var in data.columns.tolist():
+		st.session_state.error_message += "La variable categórica no corresponde a alguna de las columnas en la matriz de datos.\n\n"
 
-		if not st.session_state.outheat:
-			st.session_state.error_message += "El necesario proporcionar un nombre de archivo para el mapa de calor.\n\n"
+	if not st.session_state.outheat:
+		st.session_state.error_message += "El necesario proporcionar un nombre de archivo para el mapa de calor.\n\n"
 
-		elif st.session_state.outheat == st.session_state.outpoints:
-			st.session_state.error_message += "El nombre de archivo para el mapa de calor debe ser diferente al del archivo de mapa de puntos.\n\n"
+	elif st.session_state.outheat == st.session_state.outpoints:
+		st.session_state.error_message += "El nombre de archivo para el mapa de calor debe ser diferente al del archivo de mapa de puntos.\n\n"
 
-		if len(st.session_state.error_message) > 0:
-			error_window(st.session_state.error_message)
-			st.session_state.error_message = ""
-			return None		
+	if len(st.session_state.error_message) > 0:
+		error_window(st.session_state.error_message)
+		st.session_state.error_message = ""
+		return None		
 
-		##################    Create grid for hotmap     ###############################
+	##################    Create grid for hotmap     ###############################
+	
+	#cell_size = dist5km['a12'] / 5 * 2 # 2 km in coordinates
+	cell_size = dist5km['a12'] / 5 * st.session_state.cell_size_km # 2 km in coordinates
+	mycrs = 4326 # projection of the grid
+	grid_cells = []
+
+	# create the cells in a loop
+	for x0 in np.arange(bbounds.loc['minx','min'], bbounds.loc['maxx','max']+cell_size, cell_size ):
+
+		for y0 in np.arange(bbounds.loc['miny','min'], bbounds.loc['maxy','max']+cell_size, cell_size):
 		
-		cell_size = dist5km['a12'] / 5 * 2 # 2 km in coordinates
-		mycrs = 4326 # projection of the grid
-		grid_cells = []
+			# bounds
+			x1 = x0-cell_size
+			y1 = y0+cell_size
+			grid_cells.append(shapely.geometry.box(x0, y0, x1, y1)  )
 
-		# create the cells in a loop
-		for x0 in np.arange(bbounds.loc['minx','min'], bbounds.loc['maxx','max']+cell_size, cell_size ):
+	cell = gpd.GeoDataFrame(grid_cells, columns=['geometry'], 
+			crs=mycrs)
 
-			for y0 in np.arange(bbounds.loc['miny','min'], bbounds.loc['maxy','max']+cell_size, cell_size):
-			
-				# bounds
-				x1 = x0-cell_size
-				y1 = y0+cell_size
-				grid_cells.append(shapely.geometry.box(x0, y0, x1, y1)  )
-
-		cell = gpd.GeoDataFrame(grid_cells, columns=['geometry'], 
-				crs=mycrs)
-
-		# Variable counts for heap map
-		merged = gpd.sjoin(fpoints, cell, how='left', predicate='within',
-			lsuffix='points', rsuffix='cells')
-		dissolve = merged.loc[merged[st.session_state.heat_map_var].notna()
-			].dissolve(
-			by="index_cells",
-			aggfunc={
-				st.session_state.heat_map_var: (lambda i: np.unique(i))   
-			}
-		)
-		dissolve['n_cats'] = dissolve[st.session_state.heat_map_var].apply(lambda m: m.shape[0])
-		cell.loc[dissolve.index, 'n_cats'] = dissolve.n_cats.values
-		thmax = cell.n_cats.max()
+	# Variable counts for heap map
+	merged = gpd.sjoin(fpoints, cell, how='left', predicate='within',
+		lsuffix='points', rsuffix='cells')
+	dissolve = merged.loc[merged[st.session_state.heat_map_var].notna()
+		].dissolve(
+		by="index_cells",
+		aggfunc={
+			st.session_state.heat_map_var: (lambda i: np.unique(i))   
+		}
+	)
+	dissolve['n_cats'] = dissolve[st.session_state.heat_map_var].apply(lambda m: m.shape[0])
+	cell.loc[dissolve.index, 'n_cats'] = dissolve.n_cats.values
+	thmax = cell.n_cats.max()
 
 
-		###################      Plot second map     ###################################
+	###################      Plot second map     ###################################
 
-		fig, ax = plt.subplots(figsize=(12, 8))
+	fig, ax = plt.subplots(figsize=(12, 8))
 
-		if plot_ext_lat and plot_ext_lon:
-			# Set map limits
-			ax.set_xlim(plot_ext_lon)
-			ax.set_ylim(plot_ext_lat)
+	if plot_ext_lat and plot_ext_lon:
+		# Set map limits
+		ax.set_xlim(plot_ext_lon)
+		ax.set_ylim(plot_ext_lat)
 
-			iax = inset_map(ax, location=st.session_state.inset_pos, size=2, xticks=[], yticks=[])
-			frame.plot(ax=iax, linewidth=0.5)
-			indicate_extent(pax=iax, bax=ax, pcrs=4326, bcrs=4326)
-			
-		frame.plot(ax=ax, color='none', edgecolor='grey', linewidth=0.5)
-		fpoints.plot(ax=ax, markersize=2)
-		f0 = frame.plot(ax=ax, color='none', edgecolor='grey', linewidth=0.5)
-		f1 = cell.plot(ax=ax, column='n_cats', cmap='viridis', vmax=thmax, edgecolor="white", legend=True)
+		iax = inset_map(ax, location=st.session_state.inset_pos, size=2, xticks=[], yticks=[])
+		frame.plot(ax=iax, linewidth=0.5)
+		indicate_extent(pax=iax, bax=ax, pcrs=4326, bcrs=4326)
+		
+	frame.plot(ax=ax, color='none', edgecolor='grey', linewidth=0.5)
+	fpoints.plot(ax=ax, markersize=2)
+	f0 = frame.plot(ax=ax, color='none', edgecolor='grey', linewidth=0.5)
+	f1 = cell.plot(ax=ax, column='n_cats', cmap='viridis', vmax=thmax, edgecolor="white", legend=True)
 
-		insert_scale(ax, dist5km['lat1'], dist5km['lon1'], dist5km['lat2'], 
-			dist5km['lon2'], st.session_state.scale_pos)
+	insert_scale(ax, dist5km['lat1'], dist5km['lon1'], dist5km['lat2'], 
+		dist5km['lon2'], st.session_state.scale_pos)
 
-		insert_arrow(ax)
+	insert_arrow(ax)
 
 
-		plt.title(st.session_state.title, pad=25)
-		plt.xlabel('Longitud', labelpad=15)
-		plt.ylabel('Latitud', labelpad=15)
-		#plt.savefig(st.session_state.outheat, dpi=300, bbox_inches='tight')
-		plt.savefig(st.session_state.bffr1, dpi=300, bbox_inches='tight', format='png')
-		st.session_state.heat_ready = True
+	plt.title(st.session_state.title, pad=25)
+	plt.xlabel('Longitud', labelpad=15)
+	plt.ylabel('Latitud', labelpad=15)
+	#plt.savefig(st.session_state.outheat, dpi=300, bbox_inches='tight')
+	plt.savefig(st.session_state.bffr1, dpi=300, bbox_inches='tight', format='png')
+	st.session_state.heat_ready = True
 
 @st.dialog("Error")
 def error_window(message):
@@ -381,15 +382,15 @@ st.markdown("""
 1. Cargue un archivo csv en formato DarwinCore con los registros biológicos que 
 desea mapear. El archivo debe contener —mínimamente— las coordenadas geográficas 
 en formato decimal, en columnas nombradas **decimalLatitude** y **decimalLongitude**, 
-así como la columnas de localidad (nombrada **verbatimLocality**) ---Esta última
-es empleada para eliminar registros inciertos---. 
+así como la columnas de localidad (nombrada **verbatimLocality**) —esta última
+es empleada para eliminar registros inciertos—. 
 Si se quiere realizar un mapa de calor utilizando una característica para agregar 
 valores, se debe indicar en la casilla **Variable categórica** el título de dicha 
 columna (por ejemplo, **scientificName**). El archivo no puede superar las 200 MB.
 
 2. Especifíque los parámetros del mapa, como el título de la gráfica, los nombres 
-de los archivos de salida y el nombre de la variable para realizar el mapa de 
-calor.
+de los archivos de salida, el nombre de la variable para realizar el mapa de 
+calor y el tamaño de la celda en la cuadricula para el mapa de calor.
 			
 3. Presione el botón :red[**Enviar**].
 			
@@ -417,6 +418,7 @@ if not "dots_ready" in st.session_state:
 
 if not "heat_ready" in st.session_state:
 	st.session_state.heat_ready = False
+
 
 with st.form(
 	"Mapper - main",
@@ -469,6 +471,15 @@ with st.form(
 		placeholder='Nombre del mapa de calor',
 		value=None,
 		key="outheat"
+	)
+
+	st.number_input(
+		"Resolucion cuadrícula",
+		min_value=0.5,
+		max_value=2.0,
+		value=2.0,
+		step=0.1,
+		key="cell_size_km"
 	)
 
 	st.selectbox(
