@@ -137,6 +137,8 @@ def get_plot_extent(
 	inset_pos: str = 'upper left',
 	buffer_perc_inset: float = 0.2,
 	buffer_perc_no_inset: float = 0.1,
+	min_width: float = 0.2,
+	min_height: float = 0.2
 	) -> tuple:
 	"""
 	Given a set of occurrences and a shapefile, retrieves the geographic limits
@@ -193,10 +195,18 @@ def get_plot_extent(
 	plot_ext_lat = (lat_min - bffr_lat_0), (lat_max + bffr_lat_1)
 	plot_ext_lon = (lon_min - bffr_lon_0), (lon_max + bffr_lon_1)
 
+	if (plot_ext_lat[1] - plot_ext_lat[0]) < min_width:
+		c = (plot_ext_lat[1] + plot_ext_lat[0]) / 2
+		plot_ext_lat = (c - (min_width / 2), c + (min_width / 2)) 
+
+	if (plot_ext_lon[1] - plot_ext_lon[0]) < min_height:
+		c = (plot_ext_lon[1] + plot_ext_lon[0]) / 2
+		plot_ext_lon = (c - (min_height / 2) , c + (min_height / 2))
+
 	return (plot_ext_lat, plot_ext_lon)
 
 
-def generate_maps():
+def generate_maps(dotsize):
 
 	if st.session_state.token != st.secrets.token:
 		st.session_state.error_message += "El token de autenticación es incorrecto.\n\n"
@@ -267,7 +277,7 @@ def generate_maps():
 
 
 	frame.plot(ax=ax, color='none', edgecolor='grey', linewidth=0.5)
-	fpoints.plot(ax=ax, markersize=2)
+	fpoints.plot(ax=ax, markersize=dotsize)
 
 	insert_scale(ax, dist5km['lat1'], dist5km['lon1'], dist5km['lat2'], 
 		dist5km['lon2'], st.session_state.scale_pos)
@@ -388,7 +398,8 @@ Si se quiere realizar un mapa de calor utilizando una característica para agreg
 valores, se debe indicar en la casilla **Variable categórica** el título de dicha 
 columna (por ejemplo, **scientificName**). El archivo no puede superar las 200 MB.
 
-2. Especifíque los parámetros del mapa, como el título de la gráfica, los nombres 
+2. Especifíque los parámetros del mapa, como el tamaño de los puntos (para el 
+mapa de registros), título de la gráfica, los nombres 
 de los archivos de salida, el nombre de la variable para realizar el mapa de 
 calor y el tamaño de la celda en la cuadricula para el mapa de calor.
 			
@@ -418,6 +429,9 @@ if not "dots_ready" in st.session_state:
 
 if not "heat_ready" in st.session_state:
 	st.session_state.heat_ready = False
+
+#if not "markersize" in st.session_state:
+#	st.session_state.markersize = 2.0 
 
 
 with st.form(
@@ -482,6 +496,16 @@ with st.form(
 		key="cell_size_km"
 	)
 
+	st.number_input(
+		"Tamaño de puntos",
+		help="Tamaño de cada punto que representa un registro en el mapa. Los valores pueden variar desde 2 hasta 5000, siendo 200 el valor sugerido al mapear un solo registro.",
+		min_value=0.5,
+		max_value=5000.0,
+		value=2.0,
+		step=0.5,
+		key="markersize"
+	)
+
 	st.selectbox(
 		"Posición escala", 
 		['upper right', 'upper left', 'lower left'], 
@@ -506,7 +530,7 @@ with st.form(
 
 		if uploaded:
 			st.session_state.data = pd.read_csv(uploaded)
-			generate_maps()
+			generate_maps(dotsize=st.session_state.markersize)
 
 		else:
 			error_window("Es necesario cargar una tabla con registros.")
