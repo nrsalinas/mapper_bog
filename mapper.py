@@ -253,6 +253,12 @@ def generate_maps(dotsize):
 
 	points = remove_uncert(points, frame, onekm)
 	fpoints = gpd.sjoin(points, frame, how='inner', predicate='within')
+	###############################################################
+	# TODO:                   ^^^^
+	# 		Warn user if all datapoints lay outside Bogotá 
+	#		if fpoints.shape[0] == 0: whatever ...
+	#
+	###############################################################
 
 	# Check plot extent
 
